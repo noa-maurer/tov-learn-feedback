@@ -30,18 +30,21 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
-load_dotenv(r"C:\Users\noama\טוב טק\AI Engineer\tov-learn-feedback\.env")
+# Resolve local files relative to this script, so the folder works on any machine/user.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 # ─── Gemini ───────────────────────────────────────────────────────────────────
 MODEL = "gemini-3.5-flash-lite"
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # ─── Google Sheets ────────────────────────────────────────────────────────────
-SERVICE_ACCOUNT_FILE = r"C:\Users\noama\טוב טק\AI Engineer\tov-learn-feedback\service_account.json"
+SERVICE_ACCOUNT_FILE = os.path.join(BASE_DIR, "service_account.json")
 SPREADSHEET_ID       = "14mdsbX_aHo29xJhcsGU52lcw5tOvhb7i2anwA5dXdEY"
 RESPONSES_GID        = 2076837780   # Tab 1 — Google Form responses
 ANALYSIS_GID         = 2047537741   # Tab 2 — analyzed output
-SYNC_STATE_FILE      = r"C:\Users\noama\טוב טק\AI Engineer\tov-learn-feedback\sync_state.json"
+SYNC_STATE_FILE      = os.path.join(BASE_DIR, "sync_state.json")
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
