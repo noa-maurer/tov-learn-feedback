@@ -21,7 +21,8 @@ This file is auto-loaded by Claude Code at the start of any session in this fold
 - `sync_state.json` — tracks last-synced answers per participant (by email) and per local row (`_local_0`), to skip reprocessing unchanged answers. Contains participant emails + feedback — gitignored.
 - `.env` — `GEMINI_API_KEY` only. Gitignored, never commit.
 - `service_account.json` — Google service account credentials (Sheets scope). Gitignored, never commit.
-- `.gitignore` — excludes `.env`, `service_account.json`, `sync_state.json`, `feedbacks.csv`.
+- `backups/` — JSON snapshots (list of rows of cell values) of the Google Sheet's analysis and סיכום tabs, named `<date>_<tab>_<context>.json`. Take one before risky Sheet writes. Contains participant feedback, so it's PII and gitignored. Restoring means writing the rows back with gspread (no restore command exists yet).
+- `.gitignore` — excludes `.env`, `service_account.json`, `sync_state.json`, `feedbacks.csv`, `backups/`.
 - `output_notes.txt`, `outputs.txt` — old scratch/output files, not part of the current pipeline.
 
 **External systems (not secret, safe to keep here):**

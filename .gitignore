@@ -5,6 +5,7 @@ service_account.json
 # Participant PII — emails and raw feedback text
 sync_state.json
 feedbacks.csv
+backups/
 
 # Python
 __pycache__/
