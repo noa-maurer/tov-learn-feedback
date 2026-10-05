@@ -108,7 +108,6 @@ ANALYZER_SYSTEM = """אתה מנתח משוב על מערכת לימוד מבו�
 - סכם בעברית יומיומית ופשוטה — אל תשתמש במילים פורמליות או אקדמיות.
 - כתוב בעברית בלבד — אסור להשתמש בתווים ערביים.
 - כאשר הטקסט המקורי כולל מונח, ביטוי, או שם בשפה אחרת (כמו "compact", "Vibe Coding", "Lesson Summaries", "Lesson") — שמור על הכתיב המקורי. אל תתעתק אותו לעברית. לדוגמה: "compact" נשאר "compact" ולא "קומפקט"; "Vibe Coding" נשאר "Vibe Coding" ולא "ויב קודינג".
-- אם תשובה ריקה, כתוב "לא ענה".
 - אל תשתמש במילה "חובה" — השתמש ב"חשוב".
 
 כלל הנקודות — קריטי:
@@ -154,13 +153,17 @@ ANALYZER_SYSTEM = """אתה מנתח משוב על מערכת לימוד מבו�
 אם המשתתף מציין שגורם חיצוני (כמו מנחים, מנהל, לקוח) ביקש ממנו משהו, ציפה ממנו משהו, או הפנה אותו לכיוון מסוים — שמור על זה בסיכום. אל תמחק את הסוכן.
 לדוגמה: אם המשתתף כתב "המנחים ציפו שאבין לבד או אשאל את ה-AI, במקום לענות לי ישירות", אל תסכם את זה כ"היה קשה לקבל תשובות" — הסכם כ"המנחים ציפו שהמשתתף יבין לבד או ישאל את ה-AI, אבל...".
 
-הפרדה בין קושי אישי מול גורם אנושי לבין מגבלה מבנית של ה-AI:
-אם המשתתף מתאר קושי אישי שלו (כמו קשיי תקשורת, נטייה לפרש לא נכון) שגרם לו קושי להבין דבר-מה לבד או מול גורם אנושי (כמו מנחים), וגם מגבלה מבנית נפרדת של ה-AI (כמו חוסר הקשר, אי-ידיעה של כוונות גורם חיצוני) — אלה שתי טענות נפרדות, גם אם מוזכרות ברצף אחד. אל תמזג אותן ואל תייחס את התכונה האישית של המשתתף ל-AI עצמו. ה-AI לא ידע לענות מסיבה מבנית (חוסר הקשר לכוונות הגורם החיצוני) — לא בגלל קשיי תקשורת של המשתתף.
-שגוי — טענה אחת שמייחסת קושי תקשורת ל-AI:
+קושי אישי מול גורם אנושי, ולמה ה-AI לא יכול היה לעזור בו:
+אם המשתתף מתאר קושי אישי שלו (כמו קשיי תקשורת, נטייה לפרש לא נכון) שגרם לו קושי להבין דבר-מה לבד או מול גורם אנושי (כמו מנחים), ומסביר שה-AI לא יכול היה לעזור בזה כי אין לו גישה לכוונות של אותו גורם — ההסבר על ה-AI הוא הנימוק של אותו קושי, לא טענה נפרדת ולא תקלה של ה-AI שצריך לתקן. כתוב נקודה אחת שכוללת את הקושי ואת ההסבר.
+בתוך הנקודה שמור על ייחוס נכון: התכונה האישית שייכת למשתתף, וה-AI לא יכול היה לעזור מסיבה מבנית (אין לו את כוונות הגורם החיצוני) — לא בגלל התכונה של המשתתף. השוואה לעבודה אמיתית שמסבירה את זה — חלק מאותה נקודה.
+גם הערה שמבהירה את גבולות הבעיה (למשל "שאלות על החומר עצמו יכולתי לשאול את ה-AI, הבעיה הייתה רק עם מה שמחוץ להקשר שלו") — חלק מאותה נקודה, לא טענה חיובית נפרדת.
+שגוי — מייחס את קשיי התקשורת ל-AI:
 - היה קשה לשאול את ה-AI שאלות שלא קשורות לחומר, כי ה-AI לא ידע מה המנחים התכוונו, בשל קשיי תקשורת ונטייה לפרש דברים לא נכון.
-נכון — שתי טענות נפרדות:
-- היה קשה להבין לבד הגדרות שקבעו המנחים, כי יש למשתתף קשיי תקשורת ונטייה לפרש דברים לא נכון.
-- ה-AI לא ידע לענות על שאלות שמחוץ להקשר של החומר, כי הוא לא יכול לדעת מה המנחים התכוונו — בדיוק כמו שבפרויקטים אמיתיים רק המנהל או הלקוח יודעים מה עבר בראש שלהם.
+שגוי — מפצל את הנימוק לנקודה נפרדת, כאילו זו תקלה של ה-AI:
+- היה קשה להבין לבד הגדרות שקבעו המנחים, כי יש לה קשיי תקשורת ונטייה לפרש דברים לא נכון.
+- ה-AI לא ידע לענות על שאלות שמחוץ להקשר של החומר, כי הוא לא יכול לדעת מה המנחים התכוונו.
+נכון — נקודה אחת:
+- היה לה קשה עם הגדרות שהמנחים קבעו לפרויקטים שאינן חלק מהחומר: המנחים רצו שתבין אותן באופן עצמאי, אבל לא תמיד הבינה לבד, כי יש לה קשיי תקשורת ונטייה לפרש דברים לא נכון. ה-AI לא יכול היה לעזור בזה, כי אין לו גישה למה שהמנחים התכוונו — שאלות על החומר עצמו כן יכלה לשאול אותו — בדיוק כמו שבפרויקטים אמיתיים רק המנהל או הלקוח שביקשו את הפרויקט יודעים מה עבר בראש שלהם.
 
 שמירה על בעלות אישית של תכונות:
 אם המשתתף מתאר תכונה אישית שלו (כמו "יש לי קשיי תקשורת" או "אני נוטה לפרש דברים לא נכון"), הצג אותה כתכונה אישית — לא כמצב מצבי כללי.
@@ -176,7 +179,27 @@ ANALYZER_SYSTEM = """אתה מנתח משוב על מערכת לימוד מבו�
 שמירה על זמן תנאי/היפותטי:
 כשהמשתתף משתמש בניסוח היפותטי או תנאי ("היה לוקח", "היה עוזר", "היה חוסך" — כלומר מה *היה* קורה אם לא היה X), שמור על אותה צורת לשון בסיכום. אל תמיר לעבר פשוט.
 שגוי: "...שלקח הרבה זמן"
-נכון: "...שהיה לוקח הרבה זמן" """
+נכון: "...שהיה לוקח הרבה זמן"
+
+דברים שכבר תוקנו — השמט:
+טענה שהמשתתף מציין במפורש שכבר תוקנה או נפתרה ("תוקן", "זה כבר סודר", "בהתחלה X, אבל זה השתנה") — השמט אותה לגמרי. היא כבר לא משוב שצריך לפעול לפיו.
+אם המשתתף פותח בהקשר כמו "דברים שכבר תוקנו במהלך הלימודים" — כל מה שנכתב באותו הקשר ומתאר מצב שכבר תוקן, גם בלי המילה "תוקן", מושמט. טענה באותה תשובה שמתארת בעיה שעדיין קיימת (בזמן הווה, למשל "אין הוראות ל...") — נשארת.
+
+טענה מקטגוריה אחרת:
+לכל שאלה יש קטגוריה — חיובי (מה עבד טוב / מה היה שימושי), שלילי (קשיים ומה לתקן) או רעיון חדש. ניתנת לך הקטגוריה של השאלה.
+- טענה שמתאימה לקטגוריה של השאלה — ב-claims.
+- טענה שבבירור שייכת לקטגוריה אחרת (למשל טענה חיובית בתשובה לשאלה על קשיים, או בקשה לתקן משהו קיים בתשובה לשאלת הרעיונות) ועדיין רלוונטית — ב-other_category, עם הקטגוריה המתאימה: "positive", "negative" או "idea".
+- טענה מקטגוריה אחרת שלפי ההקשר כבר לא רלוונטית — למשל טענה חיובית שמתארת את התוצאה של משהו שכבר תוקן — השמט אותה.
+- נימוק או הבהרה שהם חלק מטענה (ראה למעלה) — אינם טענה מקטגוריה אחרת; הם נשארים בתוך הטענה.
+דוגמה — תשובה ל"מה חשוב לתקן/לשפר?" (שלילי): "דברים שכבר תוקנו במהלך הלימודים, אז אפרט בקצרה. בהתחלה המורה לא הציג תרגולים - תוקן. חלק מהחומר לא היה עדכני - תוקן. היחידות מסודרות בצורה לוגית על פי רוב. אין הוראות למורה לוודא ולעדכן את החומר לפני הצגתו."
+נכון: claims = ["אין הוראות למורה לוודא ולעדכן את החומר לפני הצגתו."], other_category = []
+(שתי הבעיות הראשונות כבר תוקנו → מושמטות. "היחידות מסודרות בצורה לוגית" חיובית, ובהקשר של "דברים שכבר תוקנו" מתארת מצב שכבר תוקן → מושמטת. הבעיה האחרונה עדיין קיימת → נשארת.)
+
+אם לא נשארה אף טענה (הכול כבר תוקן או לא רלוונטי) — החזר רשימות ריקות.
+
+פורמט הפלט — JSON בלבד:
+{"claims": ["טענה אחת", "טענה אחרת"], "other_category": [{"category": "positive", "text": "טענה"}]}
+כל טענה היא מחרוזת אחת, בלי תו בלט בתחילתה."""
 
 
 # ─── Core API helpers ─────────────────────────────────────────────────────────
@@ -276,14 +299,13 @@ def analyze_row(row_index: int, df: pd.DataFrame):
     print(f"ניתוח — {name} (שורה {row_index})")
     print(f"{'='*50}\n")
 
-    answers_text = ""
     for q in QUESTIONS:
         answer = str(row.get(q, "")).strip()
-        answers_text += f"שאלה: {q}\nתשובה: {answer if answer and answer != 'nan' else 'לא ענה'}\n\n"
-
-    prompt = f"להלן משוב מאחד המשתתפים על Tov-Learn:\n\n{answers_text}\nסכם את הנקודות המרכזיות לפי כל שאלה."
-    result = call_api(ANALYZER_SYSTEM, prompt)
-    print(result)
+        print(f"--- {q}")
+        if not answer or answer == "nan":
+            print("לא ענה\n")
+            continue
+        print(f"{analyze_answer(q, answer) or '(כל הנקודות כבר תוקנו או אינן רלוונטיות עוד)'}\n")
 
 
 # ─── Google Sheets helpers ────────────────────────────────────────────────────
@@ -372,21 +394,70 @@ def process_response(row_dict: dict) -> dict[str, str]:
             print(f"  — {q[:40]}... (אין נתונים לדיווח)")
         else:
             # Step 2 — analyze this question alone
-            analyze_prompt = (
-                f"להלן משוב מאחד המשתתפים על Tov-Learn:\n\n"
-                f"שאלה: {q}\n"
-                f"תשובה: {answer}\n\n"
-                f"סכם את הנקודות המרכזיות לשאלה זו בנקודות בלט."
-            )
-            # Retry (with more variation) if the model slipped in letters from another script
-            for temp in (None, 0.6, 0.9):
-                results[q] = call_api(ANALYZER_SYSTEM, analyze_prompt, temperature=temp)
-                if not _FOREIGN_LETTERS.search(results[q]):
-                    break
-                print(f"  ⚠️ תווים משפה זרה בניתוח — מנסה שוב")
-            print(f"  ✅ {q[:40]}...")
+            cell = analyze_answer(q, answer)
+            if cell is None:
+                # Every claim was already fixed or no longer relevant — nothing to act on.
+                # The raw answer stays readable; '—' keeps it out of the aggregate.
+                results[q] = f"— {answer}\n(כל הנקודות כבר תוקנו או אינן רלוונטיות עוד)"
+                print(f"  — {q[:40]}... (הכול כבר תוקן / לא רלוונטי)")
+            else:
+                results[q] = cell
+                print(f"  ✅ {q[:40]}...")
 
     return results
+
+
+# Off-category claims (e.g. a positive remark in an answer to a negative question) are
+# kept in the analysis cell under this header, tagged with their category label. The
+# per-question summary skips them; the category summary files them by their tag.
+OTHER_CATEGORY_HEADER = "שייך לקטגוריה אחרת (מופיע רק בסיכום לפי קטגוריה):"
+CATEGORY_LABELS = {"positive": "חיובי", "negative": "שלילי", "idea": "רעיון חדש"}
+
+
+def _question_category(q: str) -> str:
+    return next(g["key"] for g in CATEGORY_GROUPS if q in g["questions"])
+
+
+def analyze_answer(q: str, answer: str) -> str | None:
+    """Analyze one valid answer into an analysis-tab cell: one bullet per claim, plus an
+    OTHER_CATEGORY_HEADER section for still-relevant claims of another category.
+    Claims that were already fixed, or are no longer relevant, are dropped by the analyzer.
+    Returns None if no claim is left."""
+    key = _question_category(q)
+    prompt = (f"שאלה: {q}\n"
+              f"קטגוריית השאלה: {key} ({CATEGORY_LABELS[key]})\n"
+              f"תשובה: {answer}")
+
+    def check(result) -> str | None:
+        if not isinstance(result, dict) or not isinstance(result.get("claims", []), list):
+            return "מבנה תשובת הניתוח שגוי"
+        bad = [o for o in result.get("other_category", [])
+               if not isinstance(o, dict) or o.get("category") not in CATEGORY_LABELS]
+        return "קטגוריה לא מוכרת בניתוח" if bad else None
+
+    result = _call_json(ANALYZER_SYSTEM, prompt, key=None, check=check)
+    if not isinstance(result, dict):
+        print("  ⚠️ הניתוח נכשל — נשמרת התשובה המקורית כנקודה אחת")
+        return f"- {answer}"
+
+    def clean(text) -> str:   # strip a leading bullet; foreign letters only as a last resort
+        return _FOREIGN_LETTERS.sub("", re.sub(r"^[-*•]\s*", "", str(text))).strip()
+
+    claims = [clean(c) for c in result.get("claims", []) if clean(c)]
+    other = []
+    for o in result.get("other_category", []):
+        if not isinstance(o, dict) or not clean(o.get("text", "")):
+            continue
+        if o.get("category") == key:      # not actually another category
+            claims.append(clean(o["text"]))
+        elif o.get("category") in CATEGORY_LABELS:
+            other.append((o["category"], clean(o["text"])))
+
+    lines = [f"- {c}" for c in claims]
+    if other:
+        lines += ([""] if lines else []) + [OTHER_CATEGORY_HEADER]
+        lines += [f"- [{CATEGORY_LABELS[cat]}] {text}" for cat, text in other]
+    return "\n".join(lines) or None
 
 
 def find_analysis_row_num(analysis_ws, index: int) -> int | None:
@@ -553,13 +624,14 @@ _MERGE_RULES = """כל טענה בקלט מסומנת במזהה בסוגריי�
 - מזג רק טענות שמבטאות בדיוק את אותו רעיון לגבי אותה ישות, בעיה או סיבה. שתי בעיות שונות לא מתמזגות, גם אם הן מופיעות באותו הקשר, נוגעות לאותו רכיב, או נשמעות קשורות.
   דוגמה: "חשוב להוסיף אפשרות לעבור שקופית שקופית, כי המערכת הציגה כמה שקופיות בבת אחת" ו"חשוב לדאוג שהמערכת לא תדלג על תרגולים" — שתי בעיות שונות → שתי טענות נפרדות.
 - אל תמזג טענות שעוסקות בישויות שונות (למשל: תכונה אישית של משתתף לעומת מגבלה של ה-AI או של המערכת), גם אם הן מוזכרות באותו הקשר.
-  דוגמה: "יש לה קשיי תקשורת ונטייה לפרש דברים לא נכון" ו"ה-AI לא יכול לדעת למה המנחים התכוונו" — תכונה אישית מול מגבלה של ה-AI → שתי טענות נפרדות.
+  דוגמה: "היה לה קשה להבין לבד הגדרות של המנחים, כי יש לה קשיי תקשורת" ו"ההסברים לא היו עמוקים מספיק" — קושי שנובע מתכונה אישית מול מגבלה של המערכת → שתי טענות נפרדות.
 - תכונה אישית של משתתף נשארת שלו בלבד — אל תכליל אותה ל"המשתתפים" ואל תייחס אותה ל-AI או למערכת. שמור על ניסוח הבעלות כמו במקור: "ויש לה קשיי תקשורת", לא "ויש קשיי תקשורת" או "היו קשיי תקשורת".
-- אם מיזוג של טענה לתוך טענה כללית יותר גורם לאובדן פרט (תכונה אישית, סיבה ספציפית, דוגמה) — אל תמזג. השאר שתי טענות נפרדות.
+- שתי טענות שמבטאות את אותו רעיון מרכזי, כשאחת מפורטת יותר מהשנייה — מזג אותן, וכתוב את הטענה הממוזגת כך שתכלול את כל הפרטים של שתיהן (תכונה אישית, סיבה ספציפית, דוגמה). אל תשמיט פרט, ואל תשאיר אותן נפרדות רק בגלל שרמת הפירוט שונה.
+  דוגמה: "האפשרות לשאול שאלות על מה שלא הבינה, כך שה-AI ענה מתוך ההקשר של החומר, עזרה להבין באופן עצמאי, במקום לשאול את המנחים" ו"האפשרות לשאול שאלות בפירוט והתשובות שהמערכת מציעה" — אותו רעיון (האפשרות לשאול את ה-AI שאלות) → טענה אחת שכוללת את הפרטים של שתיהן.
 - לעולם אל תשים ב-sources של טענה אחת שני מזהים של אותו משתתף שנכתבו תחת אותה שאלה — כל מזהה כזה הוא כבר טענה נפרדת.
 - טענות של אותו משתתף מתמזגות רק אם הן אותה טענה בדיוק שנכתבה תחת שתי שאלות שונות. טענות שונות של אותו משתתף נשארות נפרדות, גם אם הן באותו נושא כללי.
   דוגמה: "בהתחלה המורה לא הציג תרגולים (תוקן)" ו"חלק מהחומר לא היה עדכני (תוקן)" — שתי בעיות שונות → שתי טענות נפרדות.
-- כשאתה בספק אם למזג — אל תמזג.
+- כשאתה בספק אם שתי טענות הן אותו רעיון — אל תמזג. רמת פירוט שונה של אותו רעיון אינה סיבה לספק.
 - הטקסט של כל טענה ממוזגת הוא נקודה אחת, בלי ספירה, בלי מספר משתתפים, בלי מזהים, בלי תיוג משתתף ("ציין משתתף X"), ובלי הקדמה או סיכום.
 - שמור על שפה יומיומית ופשוטה בעברית.
 - כתוב בעברית בלבד — אסור להשתמש בתווים ערביים.
@@ -588,22 +660,8 @@ CATEGORY_MERGER_SYSTEM = """אתה מסכם משוב קבוצתי על מערכ�
 
 החזר JSON בלבד: {"claims": [{"text": "ניסוח הטענה", "sources": ["u3", "u17"]}]}"""
 
-CATEGORY_CLASSIFIER_SYSTEM = """אתה ממיין טענות ממשוב על מערכת לימוד מבוססת AI בשם Tov-Learn לקטגוריות.
-כל טענה מסומנת במזהה, וליד כל טענה מופיעה השאלה שתחתיה נכתבה ו"ברירת מחדל" — הקטגוריה של אותה שאלה.
-
-הקטגוריות:
-- "positive" — משהו שעבד טוב, עזר או היה שימושי.
-- "negative" — קושי, בעיה, משהו לא ברור, משהו שחסר, או בקשה לתקן/לשפר משהו שקיים בקורס (כולל בקשות תהליכיות כמו "להודיע מראש", "לתעד מוקדם יותר", "לתת גישה למודלים חזקים יותר", "לאפשר לעבור שקופית שקופית").
-- "idea" — הצעה להוסיף משהו חדש לגמרי: שיעור, תרגיל, סדנה, פיצ'ר, קובץ, מפגש וכו'.
-
-כלל עיקרי: השתמש בברירת המחדל, ושנה אותה רק כשהתוכן בבירור שייך לקטגוריה אחרת.
-המקרה הנפוץ לשינוי: טענה חיובית שנכתבה תחת שאלה על קשיים או שיפורים — למשל "היחידות מסודרות בצורה לוגית" בתשובה ל"מה חשוב לתקן?", או תשובה על מה שהיה שימושי שהמשתתף העתיק לשאלה על מה היה קשה — היא "positive".
-בקשה לתקן משהו קיים שנכתבה תחת שאלת הרעיונות היא "negative".
-
-החזר JSON בלבד: {"categories": {"u1": "positive", "u2": "negative"}} — עם כל המזהים."""
-
-# Claims are assigned to a category by their content (see CATEGORY_MERGER_SYSTEM);
-# "questions" is only the fallback for a claim the merger dropped or left uncategorized.
+# A claim belongs to its question's category, unless the analyzer tagged it as another
+# category (OTHER_CATEGORY_HEADER section of the analysis cell).
 CATEGORY_GROUPS = [
     {
         "key": "positive",
@@ -636,16 +694,28 @@ def _aggregate_value(raw: str) -> str | None:
     return value
 
 
-def _split_claims(cell: str) -> list[str]:
-    """One analyzed cell -> its claims: the bullet lines, or the whole cell if it has none.
-    Drops analyzer preambles like 'בהתבסס על המשוב, להלן הנקודות המרכזיות:'."""
-    bullets = [re.sub(r"^[-*•]\s*", "", line).strip()
-               for line in cell.splitlines() if re.match(r"^\s*[-*•]\s+", line)]
-    return bullets or [cell.strip()]
+def _split_claims(cell: str) -> list[tuple[str, str | None]]:
+    """One analyzed cell -> [(claim, category key or None)].
+    Main bullets get None (= the question's own category); bullets under
+    OTHER_CATEGORY_HEADER get their tagged category. A main part with no bullets
+    (older free-text cells) is one claim. Drops analyzer preambles like
+    'בהתבסס על המשוב, להלן הנקודות המרכזיות:'."""
+    main, _, other = cell.partition(OTHER_CATEGORY_HEADER)
+    bullet = r"^\s*[-*•]\s+"
+    claims = [(re.sub(bullet, "", line).strip(), None)
+              for line in main.splitlines() if re.match(bullet, line)]
+    if not claims and main.strip():
+        claims = [(main.strip(), None)]
+    label_to_key = {label: key for key, label in CATEGORY_LABELS.items()}
+    for line in other.splitlines():
+        m = re.match(bullet + r"\[(.+?)\]\s*(.+)$", line)
+        if m:
+            claims.append((m.group(2).strip(), label_to_key.get(m.group(1).strip())))
+    return claims
 
 
-def _call_json(system_prompt: str, prompt: str, key: str, check=None):
-    """Call Gemini in JSON mode and return parsed[key].
+def _call_json(system_prompt: str, prompt: str, key: str | None, check=None):
+    """Call Gemini in JSON mode and return parsed[key] (the whole object if key is None).
     Retries — at rising temperature, so a retry can actually differ — on invalid JSON,
     letters from foreign scripts, or a failed check(value) (returns an error string or None).
     If every attempt fails a check, returns the last parsed value for the caller to repair;
@@ -656,7 +726,8 @@ def _call_json(system_prompt: str, prompt: str, key: str, check=None):
         retrying = " — מנסה שוב" if attempt < len(temps) - 1 else ""
         raw = call_api(system_prompt, prompt, json_mode=True, temperature=temp)
         try:
-            value = json.loads(raw)[key]
+            parsed = json.loads(raw)
+            value = parsed if key is None else parsed[key]
         except (json.JSONDecodeError, KeyError, TypeError):
             print(f"    ⚠️ תשובה אינה JSON תקין{retrying}")
             continue
@@ -685,22 +756,13 @@ def _render_bullets(items: list[dict]) -> str:
                        for p, its in by_participant.items())
 
 
-def _render_units(items: list[dict], q_to_key: dict[str, str] | None = None) -> str:
+def _render_units(items: list[dict]) -> str:
     """Per-question merged claims, one line each, with their question and participants."""
     lines = []
     for it in items:
         participants = sorted({s.split(".")[0][1:] for s in it["sources"]}, key=int)
-        default = f" | ברירת מחדל: {q_to_key[it['q']]}" if q_to_key else ""
-        lines.append(f"[{it['id']}] (שאלה: {it['q']}{default} | משתתפים: {', '.join(participants)}) {it['text']}")
+        lines.append(f"[{it['id']}] (שאלה: {it['q']} | משתתפים: {', '.join(participants)}) {it['text']}")
     return "\n".join(lines)
-
-
-def _classify_claims(items: list[dict], q_to_key: dict[str, str]) -> dict[str, str]:
-    """item id -> category key, by content. Falls back to the question's category."""
-    result = _call_json(CATEGORY_CLASSIFIER_SYSTEM, _render_units(items, q_to_key), "categories") or {}
-    keys = set(q_to_key.values())
-    return {it["id"]: result.get(it["id"]) if result.get(it["id"]) in keys else q_to_key[it["q"]]
-            for it in items}
 
 
 def _merge_claims(system_prompt: str, prompt: str, items: list[dict], conflict_keys) -> list[dict]:
@@ -773,19 +835,20 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
             value = _aggregate_value(str(r.get(q, "")))
             if not value:
                 continue
-            for text in _split_claims(value):
+            for text, cat in _split_claims(value):
                 n += 1
                 cid = f"p{p}.{n}"
-                bullets_by_q[q].append({"id": cid, "q": q, "text": text, "sources": [cid]})
+                bullets_by_q[q].append({"id": cid, "q": q, "text": text, "sources": [cid], "cat": cat})
 
     # ── Part 1: per-question summary ──────────────────────────────────────────
     # Never merge two bullets of the same participant: within one question they are
     # by construction different claims (the analyzer emits one bullet per claim).
+    # Off-category claims (tagged by the analyzer) are left out of part 1 entirely.
     print("חלק 1: סיכום לפי שאלה")
     question_rows = [["שאלה", "סיכום משולב"]]
     units: list[dict] = []
     for q in QUESTIONS:
-        items = bullets_by_q[q]
+        items = [b for b in bullets_by_q[q] if b["cat"] is None]
         print(f"  {q[:38]}... ({len(items)} טענות)")
         if not items:
             question_rows.append([q, "אין נתונים."])
@@ -793,25 +856,26 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
         merged = _merge_claims(MERGER_SYSTEM, f"שאלה: {q}\n\n{_render_bullets(items)}", items,
                                conflict_keys=lambda it: [it["id"].split(".")[0]])
         question_rows.append([q, _format_claims(merged)])
-        start = len(units)   # computed once: len(units) grows while extend() consumes
-        units.extend({"id": f"u{start + k + 1}", "q": q, **c} for k, c in enumerate(merged))
+        units.extend({"q": q, "cat": _question_category(q), **c} for c in merged)
         print(f"    ✅ אוחדו ל-{len(merged)} טענות")
 
     # ── Part 2: category summary ───────────────────────────────────────────────
-    # Built from the per-question claims, so every merge made in part 1 carries over.
-    # Each claim is categorized by its content, then merged with identical claims —
-    # across questions, or within a question when part 1 missed a merge — but never
-    # two different claims of the same participant under the same question.
+    # Built from the per-question claims (so every merge made in part 1 carries over) plus
+    # the off-category claims, each in the category the analyzer tagged it with. Claims are
+    # merged with identical ones — across questions, or within a question when part 1
+    # missed a merge — but never two different claims of the same participant under the
+    # same question.
     print("\nחלק 2: סיכום לפי קטגוריה")
-    q_to_key = {q: g["key"] for g in CATEGORY_GROUPS for q in g["questions"]}
-    categories = _classify_claims(units, q_to_key) if units else {}
-    moved = [u["id"] for u in units if categories[u["id"]] != q_to_key[u["q"]]]
-    if moved:
-        print(f"  {len(moved)} טענות שויכו לקטגוריה שונה מזו של השאלה: {', '.join(moved)}")
+    other = [b for q in QUESTIONS for b in bullets_by_q[q] if b["cat"] is not None]
+    if other:
+        print(f"  {len(other)} טענות מקטגוריה אחרת: {', '.join(b['id'] for b in other)}")
+    units += [{"q": b["q"], "cat": b["cat"], "text": b["text"], "sources": b["sources"]} for b in other]
+    for k, u in enumerate(units, start=1):
+        u["id"] = f"u{k}"
 
     category_rows = [["קטגוריה", "סיכום משולב"]]
     for g in CATEGORY_GROUPS:
-        items = [u for u in units if categories[u["id"]] == g["key"]]
+        items = [u for u in units if u["cat"] == g["key"]]
         print(f"  {g['name']}... ({len(items)} טענות)")
         if not items:
             category_rows.append([g["name"], "אין נתונים."])
