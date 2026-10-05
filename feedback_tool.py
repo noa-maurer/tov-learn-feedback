@@ -73,7 +73,9 @@ VALIDATOR_SYSTEM = """אתה מנתח משוב על מערכת לימוד מבו
 1. נושא מזוהה — ברור על איזה חלק או היבט של הקורס/המערכת מדובר. נושא כללי מספיק: "הבחנים", "התרגילים", "קצב הלימוד", "השיחה עם ה-AI", "ההתקנה". אין צורך בשיעור או תרגיל מסוים.
 2. טענה ממשית — נאמר משהו על הנושא: שהוא עזר, הפריע, היה קשה, היה חסר, כדאי להוסיף אותו וכו'.
    השאלה עצמה יכולה לספק את הטענה: תשובה שרק מציינת נושא בתגובה ל"מה עבד טוב?" אומרת שהנושא עבד טוב; בתגובה ל"מה היה קשה?" — שהוא היה קשה, וכן הלאה. זו טענה ממשית ומספקת.
-3. מובנות — אפשר להבין את התשובה ולסכם אותה כנקודת משוב, והיא עונה על השאלה שנשאלה (או לפחות אומרת משהו רלוונטי לקורס).
+3. מובנות — אפשר להבין את התשובה ולסכם אותה כנקודת משוב, והיא עונה על השאלה שנשאלה.
+   תשובה שכולה עונה בבירור על שאלה אחרת אינה עונה על השאלה — למשל תשובה שכולה מתארת מה היה שימושי או מה עבד טוב, בתגובה ל"מה היה לא ברור או קשה?" (קורה כשמשתתף מעתיק תשובה לשדה הלא נכון).
+   תשובה שעונה על השאלה וכוללת בנוסף הערה מסוג אחר — תקפה (למשל תשובה ל"מה חשוב לתקן?" שמונה כמה תיקונים ומוסיפה "היחידות מסודרות בצורה לוגית").
 
 גם תשובת "אין" מספקת — המשתתף מציין במפורש שאין לו קשיים, רעיונות, תלונות וכו' (למשל: "לא היו לי קשיים", "הכל היה בסדר", "אין לי רעיונות להוסיף"). היא עונה על השאלה.
 סמן nothing_to_report=true רק כשכל התשובה היא תשובת "אין" כזו. אם יש בתשובה ולו טענה אחת ממשית — גם אם היא מנוסחת בשלילה ("ההסברים לא היו עמוקים מספיק", "ה-JSON לא היה ברור", "לא היו מספיק תרגולים") — זו טענה, ו-nothing_to_report=false.
@@ -91,8 +93,10 @@ VALIDATOR_SYSTEM = """אתה מנתח משוב על מערכת לימוד מבו
 - אין נושא מזוהה — לא ברור על מה מדובר: "חלק מהדברים היו קשים.", "היו כמה בעיות.", "אחד השיעורים היה מבלבל."
 - אין טענה ממשית — לא ניתן לדעת מה המשתתף אומר, גם בהתחשב בשאלה: "בערך.", "תלוי.", "לא בטוחה."
 - לא מובנת — משובשת, סותרת את עצמה, או מפנה למשהו שאינו זמין: "כמו שכתבתי קודם.", "זה שאמרתי לך."
+- עונה על שאלה אחרת — כל התשובה שייכת בבירור לשאלה אחרת: "הנושאים שהיו שימושיים במיוחד עבורי הם Prompt Engineering ו-RAG." בתגובה ל"מה היה לא ברור או קשה?".
 
 אם התשובה אינה מספקת, כתוב שאלת המשך קצרה וספציפית בעברית שמכוונת בדיוק למה שחסר (הנושא, הטענה, או הבהרה).
+לתשובה שעונה על שאלה אחרת — ציין בעדינות שנראה שהתשובה מתאימה לשאלה אחרת, ושאל שוב את השאלה המקורית.
 בשדה reason כתוב בקצרה בעברית מה הנושא והטענה שזיהית, או מה חסר.
 החזר JSON בלבד, ללא טקסט נוסף: {"sufficient": true/false, "nothing_to_report": true/false, "reason": "הסבר קצר", "followup": "שאלת המשך" או null}"""
 
@@ -409,11 +413,18 @@ def _is_valid_value(value: str) -> bool:
     return bool(s) and not s.startswith("⚠️") and s.lstrip("-* ").strip() not in _SKIP_CELL
 
 
-def write_analysis_row(analysis_ws, index: int, results: dict[str, str], update_row: int | None):
+def write_analysis_row(analysis_ws, index: int, results: dict[str, str], update_row: int | None,
+                       changed: set[str] | None = None):
     """Append a new row, or update an existing one.
-    History is kept only for valid -> invalid changes: a new ⚠️ value keeps the
-    last valid version in (*...*). Any other update replaces the cell outright."""
+    History is kept only when the participant replaced a valid answer with a new invalid
+    one: the new ⚠️ value keeps the last valid version in (*...*). `changed` = questions
+    whose answer text changed since the last sync (None = treat all as changed).
+    If the answer is unchanged and only re-judged invalid (e.g. after a stricter
+    validation rule), the old analysis is not kept — it analyzed this same answer.
+    An already-kept version (from an earlier, different answer) is carried forward.
+    Any other update replaces the cell outright."""
     row_values = [str(index)] + [results.get(q, "") for q in QUESTIONS]
+    columns = [None] + QUESTIONS
 
     if update_row is None:
         analysis_ws.append_row(row_values, value_input_option="USER_ENTERED")
@@ -425,12 +436,16 @@ def write_analysis_row(analysis_ws, index: int, results: dict[str, str], update_
         existing.append("")
 
     merged = []
-    for new_val, old_val in zip(row_values, existing):
+    for q, new_val, old_val in zip(columns, row_values, existing):
         if not new_val.startswith("⚠️"):
             merged.append(new_val)
             continue
         old_current, old_preserved = _split_preserved(old_val)
-        last_valid = old_current if _is_valid_value(old_current) else old_preserved
+        answer_changed = changed is None or q in changed
+        if answer_changed and _is_valid_value(old_current):
+            last_valid = old_current
+        else:
+            last_valid = old_preserved
         merged.append(f"{new_val}\n\n(*{last_valid}*)" if last_valid else new_val)
 
     end_col = chr(ord("A") + len(QUESTIONS))  # e.g. "F" for 5 questions
@@ -474,7 +489,9 @@ def sync_command(list_columns: bool = False, force_index: int | None = None):
 
         results = process_response(row)
         existing_row = find_analysis_row_num(analysis_ws, idx)
-        write_analysis_row(analysis_ws, idx, results, update_row=existing_row)
+        prev_answers = state.get(state_key, {}).get("answers") or {}
+        changed = {q for q in QUESTIONS if prev_answers.get(q) != current_answers[q]}
+        write_analysis_row(analysis_ws, idx, results, update_row=existing_row, changed=changed)
 
         state[state_key] = {"index": idx, "answers": current_answers}
         save_sync_state(state)
@@ -513,7 +530,9 @@ def sync_command(list_columns: bool = False, force_index: int | None = None):
         results = process_response(row)
 
         existing_row = find_analysis_row_num(analysis_ws, i)
-        write_analysis_row(analysis_ws, i, results, update_row=existing_row)
+        prev_answers = prev.get("answers") or {}
+        changed = {q for q in QUESTIONS if prev_answers.get(q) != current_answers[q]}
+        write_analysis_row(analysis_ws, i, results, update_row=existing_row, changed=changed)
 
         state[email] = {"index": i, "answers": current_answers}
         save_sync_state(state)
@@ -556,10 +575,10 @@ MERGER_SYSTEM = f"""אתה מסכם משוב קבוצתי על מערכת לימ
 
 CATEGORY_MERGER_SYSTEM = """אתה מסכם משוב קבוצתי על מערכת לימוד מבוססת AI בשם Tov-Learn.
 קיבלת טענות שכבר אוחדו בסיכום לפי שאלה, וכולן שייכות לאותה קטגוריה. כל טענה מסומנת במזהה [uN], ולידה השאלה שתחתיה נכתבה והמשתתפים שציינו אותה.
-טענות מאותה שאלה כבר אוחדו ביניהן — תפקידך רק לאחד טענה עם טענה זהה לה משאלה אחרת (למשל אותו רעיון שמשתתפים כתבו פעם תחת "מה עבד טוב?" ופעם תחת "אילו חלקים היו שימושיים?").
+תפקידך לאחד טענות זהות שעדיין מופיעות בנפרד — בעיקר אותו רעיון שנכתב תחת שאלות שונות (למשל פעם תחת "מה עבד טוב?" ופעם תחת "אילו חלקים היו שימושיים?"), וגם אותו רעיון ממשתתפים שונים תחת אותה שאלה, אם לא אוחד קודם.
 
 כללים:
-- לעולם אל תשים ב-sources של טענה אחת שני מזהים מאותה שאלה.
+- לעולם אל תמזג שתי טענות מאותה שאלה שיש להן משתתף משותף — אלה טענות שונות של אותו משתתף.
 - מזג רק טענות שמבטאות בדיוק את אותו רעיון לגבי אותה ישות, בעיה או סיבה. כשאתה בספק — אל תמזג.
 - כל מזהה מהקלט חייב להופיע ב-sources של בדיוק טענה אחת. טענה שלא מוזגה עם אף אחת — החזר אותה לבד, בניסוח המקורי.
 - בטענה ממוזגת כתוב ניסוח ברור שמכיל את הפרטים של כל הטענות שמוזגו — אל תשמיט פרט.
@@ -779,9 +798,10 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
         print(f"    ✅ אוחדו ל-{len(merged)} טענות")
 
     # ── Part 2: category summary ───────────────────────────────────────────────
-    # Built from the per-question claims, so every merge made in part 1 carries over and
-    # the two parts never disagree. Each claim is categorized by its content, then merged
-    # only with claims from *other* questions (same-question merging was done in part 1).
+    # Built from the per-question claims, so every merge made in part 1 carries over.
+    # Each claim is categorized by its content, then merged with identical claims —
+    # across questions, or within a question when part 1 missed a merge — but never
+    # two different claims of the same participant under the same question.
     print("\nחלק 2: סיכום לפי קטגוריה")
     q_to_key = {q: g["key"] for g in CATEGORY_GROUPS for q in g["questions"]}
     categories = _classify_claims(units, q_to_key) if units else {}
@@ -798,7 +818,7 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
             continue
         prompt = f"קטגוריה: {g['name']}\n\n{_render_units(items)}"
         merged = _merge_claims(CATEGORY_MERGER_SYSTEM, prompt, items,
-                               conflict_keys=lambda it: [it["q"]])
+                               conflict_keys=lambda it: [(s.split(".")[0], it["q"]) for s in it["sources"]])
         category_rows.append([g["name"], _format_claims(merged)])
         print(f"    ✅ אוחדו ל-{len(merged)} טענות")
 
