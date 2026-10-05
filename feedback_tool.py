@@ -176,7 +176,15 @@ ANALYZER_SYSTEM = """אתה מנתח משוב על מערכת לימוד מבו�
 
 
 # ─── Core API helpers ─────────────────────────────────────────────────────────
-def call_api(system_prompt: str, user_prompt: str) -> str:
+# Letters from scripts other than Hebrew/Latin (e.g. Arabic "ال", Georgian "ექ") that the
+# model sometimes slips into Hebrew text. Digits, punctuation and symbols are not matched.
+_FOREIGN_LETTERS = re.compile(r"[^\W\d_a-zA-Z֐-׿]")
+
+
+def call_api(system_prompt: str, user_prompt: str, json_mode: bool = False,
+             temperature: float | None = None) -> str:
+    if temperature is None:
+        temperature = 0.0 if json_mode else 0.3   # JSON = merge/classify: favor stability
     from google.genai.errors import ClientError
     for attempt in range(4):
         try:
@@ -185,7 +193,8 @@ def call_api(system_prompt: str, user_prompt: str) -> str:
                 contents=user_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    temperature=0.3,
+                    temperature=temperature,
+                    response_mime_type="application/json" if json_mode else None,
                 )
             )
             time.sleep(4)   # proactive throttle — stays under 15 RPM free-tier limit
@@ -365,7 +374,12 @@ def process_response(row_dict: dict) -> dict[str, str]:
                 f"תשובה: {answer}\n\n"
                 f"סכם את הנקודות המרכזיות לשאלה זו בנקודות בלט."
             )
-            results[q] = call_api(ANALYZER_SYSTEM, analyze_prompt)
+            # Retry (with more variation) if the model slipped in letters from another script
+            for temp in (None, 0.6, 0.9):
+                results[q] = call_api(ANALYZER_SYSTEM, analyze_prompt, temperature=temp)
+                if not _FOREIGN_LETTERS.search(results[q]):
+                    break
+                print(f"  ⚠️ תווים משפה זרה בניתוח — מנסה שוב")
             print(f"  ✅ {q[:40]}...")
 
     return results
@@ -380,8 +394,25 @@ def find_analysis_row_num(analysis_ws, index: int) -> int | None:
     return None
 
 
+def _split_preserved(text: str) -> tuple[str, str | None]:
+    """Split a cell into (current value, preserved last-valid version or None)."""
+    current, sep, rest = text.partition("\n\n(*")
+    if not sep:
+        return text.strip(), None
+    preserved = rest[:-2] if rest.endswith("*)") else rest
+    return current.strip(), preserved.strip() or None
+
+
+def _is_valid_value(value: str) -> bool:
+    """A cell value holding a valid answer: analyzed claims or a '—' nothing-to-report."""
+    s = value.strip()
+    return bool(s) and not s.startswith("⚠️") and s.lstrip("-* ").strip() not in _SKIP_CELL
+
+
 def write_analysis_row(analysis_ws, index: int, results: dict[str, str], update_row: int | None):
-    """Append a new row, or update an existing one (preserving old values in (*...*)."""
+    """Append a new row, or update an existing one.
+    History is kept only for valid -> invalid changes: a new ⚠️ value keeps the
+    last valid version in (*...*). Any other update replaces the cell outright."""
     row_values = [str(index)] + [results.get(q, "") for q in QUESTIONS]
 
     if update_row is None:
@@ -395,11 +426,12 @@ def write_analysis_row(analysis_ws, index: int, results: dict[str, str], update_
 
     merged = []
     for new_val, old_val in zip(row_values, existing):
-        # Preserve old valid analysis; don't preserve old flags (⚠️) or empty cells
-        if old_val and old_val != new_val and not old_val.startswith("⚠️"):
-            merged.append(f"{new_val}\n\n(*{old_val}*)")
-        else:
+        if not new_val.startswith("⚠️"):
             merged.append(new_val)
+            continue
+        old_current, old_preserved = _split_preserved(old_val)
+        last_valid = old_current if _is_valid_value(old_current) else old_preserved
+        merged.append(f"{new_val}\n\n(*{last_valid}*)" if last_valid else new_val)
 
     end_col = chr(ord("A") + len(QUESTIONS))  # e.g. "F" for 5 questions
     analysis_ws.update(
@@ -493,48 +525,79 @@ def sync_command(list_columns: bool = False, force_index: int | None = None):
 
 
 # ─── Aggregate command ───────────────────────────────────────────────────────
-MERGER_SYSTEM = """אתה מסכם משוב קבוצתי על מערכת לימוד מבוססת AI בשם Tov-Learn.
-קיבלת טענות מנותחות ממספר משתתפים לאותה שאלה. תפקידך לאחד טענות דומות ולספור כמה משתתפים ציינו כל טענה.
+_MERGE_RULES = """כל טענה בקלט מסומנת במזהה בסוגריים מרובעים, למשל [p3.2] = משתתף 3, טענה 2.
+תפקידך לאחד טענות זהות או דומות לטענה ממוזגת אחת, ולציין ב-sources את המזהים של כל הטענות שמוזגו לתוכה.
+אינך סופר משתתפים ואינך כותב ספירות — הקוד מחשב כמה משתתפים ציינו כל טענה מתוך sources.
 
 כללים:
-- מזג טענות שמבטאות את אותו רעיון, גם אם הניסוח שונה — כתוב ניסוח ברור ומייצג.
-- הוסף בסוגריים כמה משתתפים ציינו כל טענה אם יותר מאחד — למשל: (ציינו 3 משתתפים).
-- טענה שרק משתתף אחד ציין — אל תוסיף לה ספירה, אבל אל תשמיט אותה: כל טענה ייחודית חייבת להופיע בסיכום. אל תציין לגביה "ציין משתתף X" או מספר/זהות של משתתף ספציפי — טענה ייחודית מופיעה בלי שום תיוג, בדיוק כמו טענה עם ספירה מופיעה רק עם המספר הכולל (ציינו N משתתפים), לא עם מספור או זיהוי של משתתפים ספציפיים.
-- מזג רק טענות שמבטאות בדיוק את אותו רעיון לגבי אותה ישות/סיבה. אל תמזג טענות שעוסקות בישויות שונות (למשל: תכונה אישית של משתתף לעומת מגבלה של ה-AI או של המערכת), גם אם הן מוזכרות באותו הקשר או נראות קשורות.
-- אם מיזוג של טענה ייחודית לתוך טענה כללית יותר גורם לאובדן פרט (כמו תכונה אישית, סיבה ספציפית, או דוגמה) שהיה בטענה המקורית — אל תמזג. השאר את הטענה הכללית (עם ספירה אם רלוונטי) ואת הטענה הייחודית כשתי נקודות נפרדות, בלי תיוג משתתפים.
-- סדר את כל הטענות (גם עם ספירה וגם בלי) ברשימה אחת, לפי פופולריות יורדת — קודם הטענות שצוינו על ידי הכי הרבה משתתפים, ואז הטענות הייחודיות.
+- כל מזהה מהקלט חייב להופיע ב-sources של בדיוק טענה ממוזגת אחת. אל תשמיט אף טענה, גם אם רק משתתף אחד ציין אותה.
+- מזג רק טענות שמבטאות בדיוק את אותו רעיון לגבי אותה ישות, בעיה או סיבה. שתי בעיות שונות לא מתמזגות, גם אם הן מופיעות באותו הקשר, נוגעות לאותו רכיב, או נשמעות קשורות.
+  דוגמה: "חשוב להוסיף אפשרות לעבור שקופית שקופית, כי המערכת הציגה כמה שקופיות בבת אחת" ו"חשוב לדאוג שהמערכת לא תדלג על תרגולים" — שתי בעיות שונות → שתי טענות נפרדות.
+- אל תמזג טענות שעוסקות בישויות שונות (למשל: תכונה אישית של משתתף לעומת מגבלה של ה-AI או של המערכת), גם אם הן מוזכרות באותו הקשר.
+  דוגמה: "יש לה קשיי תקשורת ונטייה לפרש דברים לא נכון" ו"ה-AI לא יכול לדעת למה המנחים התכוונו" — תכונה אישית מול מגבלה של ה-AI → שתי טענות נפרדות.
+- תכונה אישית של משתתף נשארת שלו בלבד — אל תכליל אותה ל"המשתתפים" ואל תייחס אותה ל-AI או למערכת. שמור על ניסוח הבעלות כמו במקור: "ויש לה קשיי תקשורת", לא "ויש קשיי תקשורת" או "היו קשיי תקשורת".
+- אם מיזוג של טענה לתוך טענה כללית יותר גורם לאובדן פרט (תכונה אישית, סיבה ספציפית, דוגמה) — אל תמזג. השאר שתי טענות נפרדות.
+- לעולם אל תשים ב-sources של טענה אחת שני מזהים של אותו משתתף שנכתבו תחת אותה שאלה — כל מזהה כזה הוא כבר טענה נפרדת.
+- טענות של אותו משתתף מתמזגות רק אם הן אותה טענה בדיוק שנכתבה תחת שתי שאלות שונות. טענות שונות של אותו משתתף נשארות נפרדות, גם אם הן באותו נושא כללי.
+  דוגמה: "בהתחלה המורה לא הציג תרגולים (תוקן)" ו"חלק מהחומר לא היה עדכני (תוקן)" — שתי בעיות שונות → שתי טענות נפרדות.
+- כשאתה בספק אם למזג — אל תמזג.
+- הטקסט של כל טענה ממוזגת הוא נקודה אחת, בלי ספירה, בלי מספר משתתפים, בלי מזהים, בלי תיוג משתתף ("ציין משתתף X"), ובלי הקדמה או סיכום.
 - שמור על שפה יומיומית ופשוטה בעברית.
 - כתוב בעברית בלבד — אסור להשתמש בתווים ערביים.
 - כאשר הטקסט המקורי כולל מונח בשפה אחרת — שמור על הכתיב המקורי.
 - אל תמציא מידע שלא נכתב."""
+
+MERGER_SYSTEM = f"""אתה מסכם משוב קבוצתי על מערכת לימוד מבוססת AI בשם Tov-Learn.
+קיבלת טענות מנותחות ממספר משתתפים לאותה שאלה או לאותה קטגוריה.
+
+{_MERGE_RULES}
+
+החזר JSON בלבד: {{"claims": [{{"text": "ניסוח הטענה הממוזגת", "sources": ["p3.2", "p5.1"]}}]}}"""
 
 CATEGORY_MERGER_SYSTEM = """אתה מסכם משוב קבוצתי על מערכת לימוד מבוססת AI בשם Tov-Learn.
-קיבלת טענות ממשתתפים שונים לאותה קטגוריה — שיכולה לכלול יותר משאלה אחת.
-תפקידך לאחד טענות דומות ולספור כמה משתתפים ייחודיים ציינו כל טענה.
+קיבלת טענות שכבר אוחדו בסיכום לפי שאלה, וכולן שייכות לאותה קטגוריה. כל טענה מסומנת במזהה [uN], ולידה השאלה שתחתיה נכתבה והמשתתפים שציינו אותה.
+טענות מאותה שאלה כבר אוחדו ביניהן — תפקידך רק לאחד טענה עם טענה זהה לה משאלה אחרת (למשל אותו רעיון שמשתתפים כתבו פעם תחת "מה עבד טוב?" ופעם תחת "אילו חלקים היו שימושיים?").
 
 כללים:
-- אם אותו משתתף ציין את אותה טענה בשתי שאלות שונות — ספר אותה פעם אחת עבור אותו משתתף.
-- מזג טענות שמבטאות את אותו רעיון ממשתתפים שונים — כתוב ניסוח ברור ומייצג.
-- הוסף בסוגריים כמה משתתפים ייחודיים ציינו כל טענה, אם יותר מאחד — למשל: (ציינו 3 משתתפים).
-- טענה שרק משתתף אחד ציין — אל תוסיף לה ספירה, אבל אל תשמיט אותה: כל טענה ייחודית חייבת להופיע בסיכום. אל תציין לגביה "ציין משתתף X" או מספר/זהות של משתתף ספציפי — טענה ייחודית מופיעה בלי שום תיוג, בדיוק כמו טענה עם ספירה מופיעה רק עם המספר הכולל (ציינו N משתתפים), לא עם מספור או זיהוי של משתתפים ספציפיים.
-- מזג רק טענות שמבטאות בדיוק את אותו רעיון לגבי אותה ישות/סיבה. אל תמזג טענות שעוסקות בישויות שונות (למשל: תכונה אישית של משתתף לעומת מגבלה של ה-AI או של המערכת), גם אם הן מוזכרות באותו הקשר או נראות קשורות.
-- אם מיזוג של טענה ייחודית לתוך טענה כללית יותר גורם לאובדן פרט (כמו תכונה אישית, סיבה ספציפית, או דוגמה) שהיה בטענה המקורית — אל תמזג. השאר את הטענה הכללית (עם ספירה אם רלוונטי) ואת הטענה הייחודית כשתי נקודות נפרדות, בלי תיוג משתתפים.
-- סדר את כל הטענות (גם עם ספירה וגם בלי) ברשימה אחת, לפי פופולריות יורדת — קודם הטענות שצוינו על ידי הכי הרבה משתתפים, ואז הטענות הייחודיות.
-- שמור על שפה יומיומית ופשוטה בעברית.
-- כתוב בעברית בלבד — אסור להשתמש בתווים ערביים.
-- כאשר הטקסט המקורי כולל מונח בשפה אחרת — שמור על הכתיב המקורי.
-- אל תמציא מידע שלא נכתב."""
+- לעולם אל תשים ב-sources של טענה אחת שני מזהים מאותה שאלה.
+- מזג רק טענות שמבטאות בדיוק את אותו רעיון לגבי אותה ישות, בעיה או סיבה. כשאתה בספק — אל תמזג.
+- כל מזהה מהקלט חייב להופיע ב-sources של בדיוק טענה אחת. טענה שלא מוזגה עם אף אחת — החזר אותה לבד, בניסוח המקורי.
+- בטענה ממוזגת כתוב ניסוח ברור שמכיל את הפרטים של כל הטענות שמוזגו — אל תשמיט פרט.
+- אל תכתוב בטקסט ספירה, מספר משתתפים, מזהים, תיוג משתתף, הקדמה או סיכום — הקוד מוסיף את הספירה.
+- תכונה אישית של משתתף נשארת שלו בלבד ובניסוח הבעלות המקורי ("ויש לה קשיי תקשורת").
+- כתוב בעברית בלבד — אסור להשתמש בתווים ערביים. מונחים בשפה אחרת — בכתיב המקורי. אל תמציא מידע שלא נכתב.
 
+החזר JSON בלבד: {"claims": [{"text": "ניסוח הטענה", "sources": ["u3", "u17"]}]}"""
+
+CATEGORY_CLASSIFIER_SYSTEM = """אתה ממיין טענות ממשוב על מערכת לימוד מבוססת AI בשם Tov-Learn לקטגוריות.
+כל טענה מסומנת במזהה, וליד כל טענה מופיעה השאלה שתחתיה נכתבה ו"ברירת מחדל" — הקטגוריה של אותה שאלה.
+
+הקטגוריות:
+- "positive" — משהו שעבד טוב, עזר או היה שימושי.
+- "negative" — קושי, בעיה, משהו לא ברור, משהו שחסר, או בקשה לתקן/לשפר משהו שקיים בקורס (כולל בקשות תהליכיות כמו "להודיע מראש", "לתעד מוקדם יותר", "לתת גישה למודלים חזקים יותר", "לאפשר לעבור שקופית שקופית").
+- "idea" — הצעה להוסיף משהו חדש לגמרי: שיעור, תרגיל, סדנה, פיצ'ר, קובץ, מפגש וכו'.
+
+כלל עיקרי: השתמש בברירת המחדל, ושנה אותה רק כשהתוכן בבירור שייך לקטגוריה אחרת.
+המקרה הנפוץ לשינוי: טענה חיובית שנכתבה תחת שאלה על קשיים או שיפורים — למשל "היחידות מסודרות בצורה לוגית" בתשובה ל"מה חשוב לתקן?", או תשובה על מה שהיה שימושי שהמשתתף העתיק לשאלה על מה היה קשה — היא "positive".
+בקשה לתקן משהו קיים שנכתבה תחת שאלת הרעיונות היא "negative".
+
+החזר JSON בלבד: {"categories": {"u1": "positive", "u2": "negative"}} — עם כל המזהים."""
+
+# Claims are assigned to a category by their content (see CATEGORY_MERGER_SYSTEM);
+# "questions" is only the fallback for a claim the merger dropped or left uncategorized.
 CATEGORY_GROUPS = [
     {
+        "key": "positive",
         "name": "חיובי — מה עבד טוב",
         "questions": ["מה עבד טוב?", "אילו חלקים היו שימושיים במיוחד?"],
     },
     {
+        "key": "negative",
         "name": "שלילי — קשיים ושיפורים",
         "questions": ["מה היה לא ברור או קשה?", "מה חשוב לתקן/לשפר? מה היה חסר?"],
     },
     {
+        "key": "idea",
         "name": "רעיונות חדשים",
         "questions": ["האם יש לכם רעיונות חדשים להוסיף?"],
     },
@@ -543,15 +606,208 @@ CATEGORY_GROUPS = [
 _SKIP_CELL = {"", "לא ענה"}   # cell values to always exclude from aggregate
 
 
-def _strip_preserved(text: str) -> str:
-    """Remove (*old value*) sections kept from previous analyses."""
-    return re.sub(r'\n\n\(\*.*?\*\)', '', text, flags=re.DOTALL).strip()
+def _aggregate_value(raw: str) -> str | None:
+    """The analyzed claims a cell contributes to the summary, or None.
+    Uses the current value; if it's ⚠️ invalid, falls back to the kept last-valid version.
+    '—' nothing-to-report values contribute nothing."""
+    current, kept = _split_preserved(raw)
+    value = kept if current.startswith("⚠️") else current
+    if not value or not _is_valid_value(value) or value.startswith("—"):
+        return None
+    return value
 
 
-def _cell_is_aggregate_worthy(raw: str) -> bool:
-    """True only when the cell has actual analyzed claims."""
-    s = raw.strip()
-    return bool(s) and s not in _SKIP_CELL and not s.startswith("⚠️") and not s.startswith("—")
+def _split_claims(cell: str) -> list[str]:
+    """One analyzed cell -> its claims: the bullet lines, or the whole cell if it has none.
+    Drops analyzer preambles like 'בהתבסס על המשוב, להלן הנקודות המרכזיות:'."""
+    bullets = [re.sub(r"^[-*•]\s*", "", line).strip()
+               for line in cell.splitlines() if re.match(r"^\s*[-*•]\s+", line)]
+    return bullets or [cell.strip()]
+
+
+def _call_json(system_prompt: str, prompt: str, key: str, check=None):
+    """Call Gemini in JSON mode and return parsed[key].
+    Retries — at rising temperature, so a retry can actually differ — on invalid JSON,
+    letters from foreign scripts, or a failed check(value) (returns an error string or None).
+    If every attempt fails a check, returns the last parsed value for the caller to repair;
+    returns None only if no attempt produced valid JSON."""
+    temps = (0.0, 0.5, 0.8)
+    last = None
+    for attempt, temp in enumerate(temps):
+        retrying = " — מנסה שוב" if attempt < len(temps) - 1 else ""
+        raw = call_api(system_prompt, prompt, json_mode=True, temperature=temp)
+        try:
+            value = json.loads(raw)[key]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            print(f"    ⚠️ תשובה אינה JSON תקין{retrying}")
+            continue
+        last = value
+        if _FOREIGN_LETTERS.search(json.dumps(value, ensure_ascii=False)):
+            print(f"    ⚠️ תווים משפה זרה (למשל ערבית) בתשובה{retrying}")
+            continue
+        error = check(value) if check else None
+        if error:
+            print(f"    ⚠️ {error}{retrying}")
+            continue
+        return value
+    return last
+
+
+# A merge item is {"id", "q", "text", "sources"}: either one analyzed bullet
+# (id "p3.2" = participant 3, claim 2; sources == [id]) or a claim already merged in the
+# per-question summary (id "u5"; sources = the bullet ids merged into it).
+
+def _render_bullets(items: list[dict]) -> str:
+    """Raw bullets of one question, as per-participant blocks of '[id] text' lines."""
+    by_participant = defaultdict(list)
+    for it in items:
+        by_participant[it["id"].split(".")[0]].append(it)
+    return "\n\n".join(f"משתתף {p[1:]}:\n" + "\n".join(f"[{it['id']}] {it['text']}" for it in its)
+                       for p, its in by_participant.items())
+
+
+def _render_units(items: list[dict], q_to_key: dict[str, str] | None = None) -> str:
+    """Per-question merged claims, one line each, with their question and participants."""
+    lines = []
+    for it in items:
+        participants = sorted({s.split(".")[0][1:] for s in it["sources"]}, key=int)
+        default = f" | ברירת מחדל: {q_to_key[it['q']]}" if q_to_key else ""
+        lines.append(f"[{it['id']}] (שאלה: {it['q']}{default} | משתתפים: {', '.join(participants)}) {it['text']}")
+    return "\n".join(lines)
+
+
+def _classify_claims(items: list[dict], q_to_key: dict[str, str]) -> dict[str, str]:
+    """item id -> category key, by content. Falls back to the question's category."""
+    result = _call_json(CATEGORY_CLASSIFIER_SYSTEM, _render_units(items, q_to_key), "categories") or {}
+    keys = set(q_to_key.values())
+    return {it["id"]: result.get(it["id"]) if result.get(it["id"]) in keys else q_to_key[it["q"]]
+            for it in items}
+
+
+def _merge_claims(system_prompt: str, prompt: str, items: list[dict], conflict_keys) -> list[dict]:
+    """Merge items via Gemini; returns [{text, sources}] with sources = bullet ids.
+    Guarantees, enforced in code rather than trusted to the model:
+    - nothing is silently dropped: any item the model left out is kept as its own claim;
+    - no merged claim contains two items with the same conflict key (conflict_keys(item)
+      returns a list of keys). Offending merges are retried, then split back into items."""
+    by_id = {it["id"]: it for it in items}
+
+    def conflicting(ids: list[str]) -> bool:
+        keys = [k for i in ids if i in by_id for k in conflict_keys(by_id[i])]
+        return len(keys) != len(set(keys))
+
+    def check(claims) -> str | None:
+        bad = sum(conflicting(c.get("sources", [])) for c in claims)
+        return f"{bad} טענות מיזגו פריטים שאסור למזג" if bad else None
+
+    claims = _call_json(system_prompt, prompt, "claims", check=check)
+    if claims is None:
+        print("    ⚠️ המיזוג נכשל — כל טענה תופיע בנפרד")
+        claims = []
+
+    merged, covered = [], set()
+    for c in claims:
+        ids = [i for i in c.get("sources", []) if i in by_id and i not in covered]
+        text = _FOREIGN_LETTERS.sub("", str(c.get("text", ""))).strip()   # last resort
+        if not ids or not text:
+            continue
+        covered.update(ids)
+        if conflicting(ids):
+            print(f"    ⚠️ פוצל מיזוג שגוי: {', '.join(ids)}")
+            merged.extend({"text": by_id[i]["text"], "sources": by_id[i]["sources"]} for i in ids)
+        elif len(ids) == 1:
+            # Not merged with anything: keep the original text, so a model that pairs one
+            # item's id with another item's text can't misattribute a claim.
+            merged.append({"text": by_id[ids[0]]["text"], "sources": by_id[ids[0]]["sources"]})
+        else:
+            merged.append({"text": text, "sources": [s for i in ids for s in by_id[i]["sources"]]})
+
+    missing = [it for it in items if it["id"] not in covered]
+    if missing:
+        print(f"    ⚠️ {len(missing)} טענות לא שויכו במיזוג — נוספו כפי שהן")
+    merged.extend({"text": it["text"], "sources": it["sources"]} for it in missing)
+    return merged
+
+
+def _participant_count(claim: dict) -> int:
+    return len({s.split(".")[0] for s in claim["sources"]})
+
+
+def _format_claims(claims: list[dict]) -> str:
+    """Bullets ordered by unique-participant count (desc); count shown only when > 1."""
+    lines = []
+    for c in sorted(claims, key=_participant_count, reverse=True):
+        n = _participant_count(c)
+        lines.append(f"- {c['text']}" + (f" (ציינו {n} משתתפים)" if n > 1 else ""))
+    return "\n".join(lines)
+
+
+def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
+    """Build the סיכום tab rows (per-question + per-category) from Sheet 2 records.
+    Gemini merges claims and tags their sources; counts and ordering are computed here."""
+    # All analyzed bullets, each with a stable id p<index>.<n> so counts are by unique participant
+    bullets_by_q: dict[str, list[dict]] = {q: [] for q in QUESTIONS}
+    for r in all_records:
+        p = str(r.get("אינדקס", "")).strip()
+        n = 0
+        for q in QUESTIONS:
+            value = _aggregate_value(str(r.get(q, "")))
+            if not value:
+                continue
+            for text in _split_claims(value):
+                n += 1
+                cid = f"p{p}.{n}"
+                bullets_by_q[q].append({"id": cid, "q": q, "text": text, "sources": [cid]})
+
+    # ── Part 1: per-question summary ──────────────────────────────────────────
+    # Never merge two bullets of the same participant: within one question they are
+    # by construction different claims (the analyzer emits one bullet per claim).
+    print("חלק 1: סיכום לפי שאלה")
+    question_rows = [["שאלה", "סיכום משולב"]]
+    units: list[dict] = []
+    for q in QUESTIONS:
+        items = bullets_by_q[q]
+        print(f"  {q[:38]}... ({len(items)} טענות)")
+        if not items:
+            question_rows.append([q, "אין נתונים."])
+            continue
+        merged = _merge_claims(MERGER_SYSTEM, f"שאלה: {q}\n\n{_render_bullets(items)}", items,
+                               conflict_keys=lambda it: [it["id"].split(".")[0]])
+        question_rows.append([q, _format_claims(merged)])
+        start = len(units)   # computed once: len(units) grows while extend() consumes
+        units.extend({"id": f"u{start + k + 1}", "q": q, **c} for k, c in enumerate(merged))
+        print(f"    ✅ אוחדו ל-{len(merged)} טענות")
+
+    # ── Part 2: category summary ───────────────────────────────────────────────
+    # Built from the per-question claims, so every merge made in part 1 carries over and
+    # the two parts never disagree. Each claim is categorized by its content, then merged
+    # only with claims from *other* questions (same-question merging was done in part 1).
+    print("\nחלק 2: סיכום לפי קטגוריה")
+    q_to_key = {q: g["key"] for g in CATEGORY_GROUPS for q in g["questions"]}
+    categories = _classify_claims(units, q_to_key) if units else {}
+    moved = [u["id"] for u in units if categories[u["id"]] != q_to_key[u["q"]]]
+    if moved:
+        print(f"  {len(moved)} טענות שויכו לקטגוריה שונה מזו של השאלה: {', '.join(moved)}")
+
+    category_rows = [["קטגוריה", "סיכום משולב"]]
+    for g in CATEGORY_GROUPS:
+        items = [u for u in units if categories[u["id"]] == g["key"]]
+        print(f"  {g['name']}... ({len(items)} טענות)")
+        if not items:
+            category_rows.append([g["name"], "אין נתונים."])
+            continue
+        prompt = f"קטגוריה: {g['name']}\n\n{_render_units(items)}"
+        merged = _merge_claims(CATEGORY_MERGER_SYSTEM, prompt, items,
+                               conflict_keys=lambda it: [it["q"]])
+        category_rows.append([g["name"], _format_claims(merged)])
+        print(f"    ✅ אוחדו ל-{len(merged)} טענות")
+
+    return (
+        [["", "סיכום לפי שאלה"]]
+        + question_rows
+        + [["", ""], ["", "סיכום לפי קטגוריה"]]
+        + category_rows
+    )
 
 
 def aggregate_command():
@@ -572,89 +828,9 @@ def aggregate_command():
         print(f"⚠️  דולג על {skipped} שורות עם אינדקס לא תקין — בדוק ומחק אותן ב-Sheet 2.\n")
 
     print(f"מאחד טענות מ-{len(all_records)} משתתפים...\n")
-
-    # ── Part 1: per-question summary ──────────────────────────────────────────
-    print("חלק 1: סיכום לפי שאלה")
-    question_rows = [["שאלה", "סיכום משולב"]]
-
-    for q in QUESTIONS:
-        cells = [_strip_preserved(str(r.get(q, "")))
-                 for r in all_records
-                 if _cell_is_aggregate_worthy(str(r.get(q, "")))]
-
-        print(f"  {q[:38]}... ({len(cells)} תגובות)")
-
-        if not cells:
-            question_rows.append([q, "אין נתונים."])
-            continue
-        if len(cells) == 1:
-            question_rows.append([q, cells[0]])
-            continue
-
-        labeled = "\n\n".join(f"[משתתף {i+1}]\n{c}" for i, c in enumerate(cells))
-        prompt = (
-            f"שאלה: {q}\n\n"
-            f"להלן תשובות מנותחות של {len(cells)} משתתפים (כל נקודת בלט = טענה אחת):\n\n"
-            f"{labeled}\n\n"
-            f"אחד את כל הטענות: מצא טענות זהות או דומות, מזג אותן, "
-            f"הוסף כמה משתתפים ציינו כל אחת (אם יותר מאחד) וסדר לפי פופולריות."
-        )
-        question_rows.append([q, call_api(MERGER_SYSTEM, prompt)])
-        print(f"    ✅ אוחדו")
-
-    # ── Part 2: category summary ───────────────────────────────────────────────
-    print("\nחלק 2: סיכום לפי קטגוריה")
-    category_rows = [["קטגוריה", "סיכום משולב"]]
-
-    for group in CATEGORY_GROUPS:
-        gname = group["name"]
-        items = [
-            (p_num, q, _strip_preserved(str(record.get(q, ""))))
-            for p_num, record in enumerate(all_records, start=1)
-            for q in group["questions"]
-            if _cell_is_aggregate_worthy(str(record.get(q, "")))
-        ]
-
-        unique_participants = len(set(p for p, _, _ in items))
-        print(f"  {gname[:38]}... ({unique_participants} משתתפים, {len(items)} תאים)")
-
-        if not items:
-            category_rows.append([gname, "אין נתונים."])
-            continue
-        if unique_participants == 1:
-            category_rows.append([gname, "\n".join(c for _, _, c in items)])
-            continue
-
-        by_p = defaultdict(list)
-        for p_num, q, cell in items:
-            by_p[p_num].append((q, cell))
-
-        labeled_parts = [
-            f"[משתתף {p} | {q}]\n{cell}"
-            for p in sorted(by_p)
-            for q, cell in by_p[p]
-        ]
-        prompt = (
-            f"קטגוריה: {gname}\n\n"
-            f"להלן טענות ממשתתפים שונים:\n\n"
-            f"{chr(10).join(labeled_parts)}\n\n"
-            f"הנחיות:\n"
-            f"1. אם אותו משתתף ציין את אותה טענה בשתי שאלות — ספר אותה פעם אחת.\n"
-            f"2. מזג טענות דומות ממשתתפים שונים לטענה אחת.\n"
-            f"3. הוסף כמה משתתפים ייחודיים ציינו כל טענה (אם יותר מאחד).\n"
-            f"4. סדר לפי פופולריות יורדת."
-        )
-        category_rows.append([gname, call_api(CATEGORY_MERGER_SYSTEM, prompt)])
-        print(f"    ✅ אוחדו")
+    all_rows = build_summary_rows(all_records)
 
     # ── Write to "סיכום" tab ───────────────────────────────────────────────────
-    all_rows = (
-        [["", "סיכום לפי שאלה"]]
-        + question_rows
-        + [["", ""], ["", "סיכום לפי קטגוריה"]]
-        + category_rows
-    )
-
     try:
         summary_ws = spreadsheet.worksheet("סיכום")
         summary_ws.clear()
