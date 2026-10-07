@@ -660,6 +660,17 @@ CATEGORY_MERGER_SYSTEM = """אתה מסכם משוב קבוצתי על מערכ�
 
 החזר JSON בלבד: {"claims": [{"text": "ניסוח הטענה", "sources": ["u3", "u17"]}]}"""
 
+TOPIC_GROUPER_SYSTEM = """אתה עוזר לסדר סיכום משוב על מערכת לימוד מבוססת AI בשם Tov-Learn.
+קיבלת רשימה ממוספרת של טענות מתוך הסיכום, וכולן מאותה קטגוריה. קבץ אותן לקבוצות לפי נושא דומה או קשור, כדי שאדם יוכל לעבור על כל קבוצה ולהחליט בעצמו אילו טענות למזג.
+
+כללים:
+- קבוצה = טענות שעוסקות באותו נושא או בנושאים קשורים — למשל כל הטענות על תרגול מעשי, כל הטענות על שאילת שאלות ל-AI, כל הטענות על שיעורים ונושאים שימושיים ספציפיים, כל הטענות על בעיות עם עברית ותצוגה.
+- טענות קשורות נכנסות לאותה קבוצה גם אם הן לא אותה טענה — זה רק קיבוץ לעיון, לא מיזוג.
+- טענה שאין לה נושא משותף עם אף טענה אחרת — קבוצה של טענה אחת.
+- כל מספר מהרשימה חייב להופיע בדיוק בקבוצה אחת.
+
+החזר JSON בלבד: {"groups": [[1, 4], [2], [3, 5, 6]]}"""
+
 # A claim belongs to its question's category, unless the analyzer tagged it as another
 # category (OTHER_CATEGORY_HEADER section of the analysis cell).
 CATEGORY_GROUPS = [
@@ -810,6 +821,37 @@ def _merge_claims(system_prompt: str, prompt: str, items: list[dict], conflict_k
     return merged
 
 
+def _topic_groups(lines: list[str]) -> list[list[str]]:
+    """Group a category's final summary bullets by related topic, for manual merge review.
+    The model only returns bullet numbers; the code guarantees every bullet lands in exactly
+    one group (left-out bullets become their own group). Groups are ordered by their first
+    bullet's position, so they follow the summary's popularity order."""
+    if len(lines) <= 1:
+        return [lines] if lines else []
+    prompt = "\n".join(f"{n}. {line.removeprefix('- ')}" for n, line in enumerate(lines, start=1))
+
+    def check(groups) -> str | None:
+        ok = isinstance(groups, list) and all(isinstance(g, list) for g in groups)
+        return None if ok else "מבנה קבוצות שגוי"
+
+    groups = _call_json(TOPIC_GROUPER_SYSTEM, prompt, "groups", check=check) or []
+    seen, result = set(), []
+    for g in groups if isinstance(groups, list) else []:
+        nums = []
+        for n in g if isinstance(g, list) else []:
+            if isinstance(n, int) and 1 <= n <= len(lines) and n not in seen:
+                seen.add(n)
+                nums.append(n)
+        if nums:
+            result.append(sorted(nums))
+    missing = [n for n in range(1, len(lines) + 1) if n not in seen]
+    if missing:
+        print(f"    ⚠️ {len(missing)} טענות לא שויכו לקבוצה — כל אחת בקבוצה משלה")
+    result += [[n] for n in missing]
+    result.sort(key=lambda g: g[0])
+    return [[lines[n - 1] for n in g] for g in result]
+
+
 def _participant_count(claim: dict) -> int:
     return len({s.split(".")[0] for s in claim["sources"]})
 
@@ -874,6 +916,7 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
         u["id"] = f"u{k}"
 
     category_rows = [["קטגוריה", "סיכום משולב"]]
+    category_lines: dict[str, list[str]] = {}
     for g in CATEGORY_GROUPS:
         items = [u for u in units if u["cat"] == g["key"]]
         print(f"  {g['name']}... ({len(items)} טענות)")
@@ -883,14 +926,28 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
         prompt = f"קטגוריה: {g['name']}\n\n{_render_units(items)}"
         merged = _merge_claims(CATEGORY_MERGER_SYSTEM, prompt, items,
                                conflict_keys=lambda it: [(s.split(".")[0], it["q"]) for s in it["sources"]])
-        category_rows.append([g["name"], _format_claims(merged)])
+        formatted = _format_claims(merged)
+        category_rows.append([g["name"], formatted])
+        category_lines[g["key"]] = formatted.splitlines()
         print(f"    ✅ אוחדו ל-{len(merged)} טענות")
+
+    # ── Part 3: category bullets grouped by related topic (for manual merge decisions) ──
+    print("\nחלק 3: קיבוץ לפי נושאים")
+    topic_rows = [["מספר סידורי", "קטגוריה", "קבוצה"]]
+    for g in CATEGORY_GROUPS:            # positive, then negative, then ideas
+        lines = category_lines.get(g["key"], [])
+        groups = _topic_groups(lines)
+        for grp in groups:
+            topic_rows.append([len(topic_rows), g["name"], "\n".join(grp)])   # serial = 1, 2, 3...
+        print(f"  {g['name']}: {len(lines)} טענות ב-{len(groups)} קבוצות")
 
     return (
         [["", "סיכום לפי שאלה"]]
         + question_rows
         + [["", ""], ["", "סיכום לפי קטגוריה"]]
         + category_rows
+        + [["", ""], ["", "קיבוץ לפי נושאים — להחלטה ידנית על מיזוגים"]]
+        + topic_rows
     )
 
 
@@ -915,11 +972,15 @@ def aggregate_command():
     all_rows = build_summary_rows(all_records)
 
     # ── Write to "סיכום" tab ───────────────────────────────────────────────────
+    width = max(len(r) for r in all_rows)   # the topic table has 3 columns
     try:
         summary_ws = spreadsheet.worksheet("סיכום")
         summary_ws.clear()
     except gspread.exceptions.WorksheetNotFound:
-        summary_ws = spreadsheet.add_worksheet(title="סיכום", rows=30, cols=2)
+        summary_ws = spreadsheet.add_worksheet(title="סיכום", rows=len(all_rows), cols=width)
+    if summary_ws.row_count < len(all_rows) or summary_ws.col_count < width:
+        summary_ws.resize(rows=max(summary_ws.row_count, len(all_rows)),
+                          cols=max(summary_ws.col_count, width))
 
     summary_ws.update(
         range_name="A1",
