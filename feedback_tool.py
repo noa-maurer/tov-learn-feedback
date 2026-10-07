@@ -871,6 +871,21 @@ def _format_claims(claims: list[dict]) -> str:
 
 AGGREGATE_STEPS = ["question", "category", "groups"]   # in run order; see aggregate --from
 
+# Raise a step's number whenever its Python logic changes in a way that changes its output
+# (e.g. how claims are split, merged, counted or formatted). Prompt and model changes are
+# detected automatically; logic changes are not, so cached outputs of that step must be
+# invalidated by hand through this number.
+AGGREGATE_LOGIC_VERSION = {"question": 1, "category": 1, "groups": 1}
+
+
+def _step_fingerprints() -> dict[str, str]:
+    """What produced each aggregate step: its prompt, the model and its logic version.
+    A cached step output is only reusable if its fingerprint still matches."""
+    prompts = {"question": MERGER_SYSTEM, "category": CATEGORY_MERGER_SYSTEM, "groups": TOPIC_GROUPER_SYSTEM}
+    return {step: hashlib.sha256(json.dumps([MODEL, prompts[step], AGGREGATE_LOGIC_VERSION[step]],
+                                            ensure_ascii=False).encode("utf-8")).hexdigest()
+            for step in AGGREGATE_STEPS}
+
 
 def build_summary_rows(all_records: list[dict], start: str = "question",
                        cache: dict | None = None) -> list[list[str]]:
@@ -1019,6 +1034,17 @@ def aggregate_command(start: str = "question"):
         if any(k not in cache for k in needed):
             print(f"⛔ המטמון חסר נתונים לשלב '{start}' — הרץ aggregate מלא (בלי --from).")
             return
+        # Every step loaded from the cache must have been produced by the current prompt,
+        # model and logic version; otherwise point to the earliest step that must rerun.
+        cached_fps = cache.get("step_fingerprints", {})
+        current_fps = _step_fingerprints()
+        loaded = AGGREGATE_STEPS[:AGGREGATE_STEPS.index(start)]
+        stale = [s for s in loaded if cached_fps.get(s) != current_fps[s]]
+        if stale:
+            rerun = "aggregate מלא (בלי --from)" if stale[0] == "question" else f"aggregate --from {stale[0]}"
+            print(f"⛔ הפרומפט, המודל או הלוגיקה של השלב '{stale[0]}' השתנו מאז שנשמר במטמון.")
+            print(f"   הרץ {rerun}.")
+            return
 
     print(f"מאחד טענות מ-{len(all_records)} משתתפים...\n")
     all_rows = build_summary_rows(all_records, start=start, cache=cache)
@@ -1042,6 +1068,9 @@ def aggregate_command(start: str = "question"):
     print("\n✅ הסיכום נכתב ל-Tab 'סיכום' ב-Google Sheets.")
 
     cache["fingerprint"] = fingerprint
+    current_fps = _step_fingerprints()
+    cache["step_fingerprints"] = {**cache.get("step_fingerprints", {}),
+                                  **{s: current_fps[s] for s in AGGREGATE_STEPS[AGGREGATE_STEPS.index(start):]}}
     with open(AGGREGATE_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
