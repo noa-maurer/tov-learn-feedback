@@ -15,6 +15,7 @@ import sys
 import json
 import re
 import time
+import hashlib
 import argparse
 from collections import defaultdict
 import pandas as pd
@@ -45,6 +46,7 @@ SPREADSHEET_ID       = "14mdsbX_aHo29xJhcsGU52lcw5tOvhb7i2anwA5dXdEY"
 RESPONSES_GID        = 2076837780   # Tab 1 — Google Form responses
 ANALYSIS_GID         = 2047537741   # Tab 2 — analyzed output
 SYNC_STATE_FILE      = os.path.join(BASE_DIR, "sync_state.json")
+AGGREGATE_CACHE_FILE = os.path.join(BASE_DIR, "aggregate_cache.json")   # step outputs for aggregate --from
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -528,7 +530,9 @@ def write_analysis_row(analysis_ws, index: int, results: dict[str, str], update_
 
 
 # ─── Sync command ─────────────────────────────────────────────────────────────
-def sync_command(list_columns: bool = False, force_index: int | None = None):
+def sync_command(list_columns: bool = False, force_index: set[int] | None = None):
+    """force_index: participant indices to reprocess even if unchanged (--force-index 1 2 7).
+    When given, other Google Form participants are skipped entirely."""
     print("מתחבר ל-Google Sheets...")
     _, responses_ws, analysis_ws = get_sheets()
 
@@ -550,7 +554,7 @@ def sync_command(list_columns: bool = False, force_index: int | None = None):
     for idx, row in read_local_feedback():
         state_key = f"_local_{idx}"
         current_answers = {q: str(row.get(q, "")).strip() for q in QUESTIONS}
-        if force_index != idx and state.get(state_key, {}).get("answers") == current_answers:
+        if idx not in (force_index or ()) and state.get(state_key, {}).get("answers") == current_answers:
             print(f"⏭️  [מקומי {idx}] — לא השתנה, מדלג")
             continue
 
@@ -583,8 +587,8 @@ def sync_command(list_columns: bool = False, force_index: int | None = None):
         name_col  = _find_col(row, NAME_COL_CANDIDATES)
         name      = str(row.get(name_col, email)).strip() if name_col else email
 
-        # --force-index N: skip all other participants
-        if force_index is not None and i != force_index:
+        # --force-index N [M ...]: skip all other participants
+        if force_index is not None and i not in force_index:
             continue
 
         # Check if unchanged since last sync (skip unless forced)
@@ -595,7 +599,7 @@ def sync_command(list_columns: bool = False, force_index: int | None = None):
             continue
 
         print(f"\n{'='*50}")
-        print(f"מעבד [{i}] {name}{' (כפוי)' if force_index else ''}")
+        print(f"מעבד [{i}] {name}{' (כפוי)' if force_index is not None else ''}")
         print(f"{'='*50}")
 
         results = process_response(row)
@@ -865,9 +869,17 @@ def _format_claims(claims: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
-    """Build the סיכום tab rows (per-question + per-category) from Sheet 2 records.
-    Gemini merges claims and tags their sources; counts and ordering are computed here."""
+AGGREGATE_STEPS = ["question", "category", "groups"]   # in run order; see aggregate --from
+
+
+def build_summary_rows(all_records: list[dict], start: str = "question",
+                       cache: dict | None = None) -> list[list[str]]:
+    """Build the סיכום tab rows (per-question, per-category, topic table) from Sheet 2 records.
+    Gemini merges claims and tags their sources; counts and ordering are computed here.
+    Steps before `start` are loaded from `cache` instead of rerun; the steps that do run
+    store their outputs in `cache` (mutated in place) for later partial reruns."""
+    cache = {} if cache is None else cache
+    run = lambda step: AGGREGATE_STEPS.index(step) >= AGGREGATE_STEPS.index(start)
     # All analyzed bullets, each with a stable id p<index>.<n> so counts are by unique participant
     bullets_by_q: dict[str, list[dict]] = {q: [] for q in QUESTIONS}
     for r in all_records:
@@ -886,20 +898,27 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
     # Never merge two bullets of the same participant: within one question they are
     # by construction different claims (the analyzer emits one bullet per claim).
     # Off-category claims (tagged by the analyzer) are left out of part 1 entirely.
-    print("חלק 1: סיכום לפי שאלה")
-    question_rows = [["שאלה", "סיכום משולב"]]
-    units: list[dict] = []
-    for q in QUESTIONS:
-        items = [b for b in bullets_by_q[q] if b["cat"] is None]
-        print(f"  {q[:38]}... ({len(items)} טענות)")
-        if not items:
-            question_rows.append([q, "אין נתונים."])
-            continue
-        merged = _merge_claims(MERGER_SYSTEM, f"שאלה: {q}\n\n{_render_bullets(items)}", items,
-                               conflict_keys=lambda it: [it["id"].split(".")[0]])
-        question_rows.append([q, _format_claims(merged)])
-        units.extend({"q": q, "cat": _question_category(q), **c} for c in merged)
-        print(f"    ✅ אוחדו ל-{len(merged)} טענות")
+    if run("question"):
+        print("חלק 1: סיכום לפי שאלה")
+        question_rows = [["שאלה", "סיכום משולב"]]
+        units: list[dict] = []
+        for q in QUESTIONS:
+            items = [b for b in bullets_by_q[q] if b["cat"] is None]
+            print(f"  {q[:38]}... ({len(items)} טענות)")
+            if not items:
+                question_rows.append([q, "אין נתונים."])
+                continue
+            merged = _merge_claims(MERGER_SYSTEM, f"שאלה: {q}\n\n{_render_bullets(items)}", items,
+                                   conflict_keys=lambda it: [it["id"].split(".")[0]])
+            question_rows.append([q, _format_claims(merged)])
+            units.extend({"q": q, "cat": _question_category(q), **c} for c in merged)
+            print(f"    ✅ אוחדו ל-{len(merged)} טענות")
+        cache["question_rows"] = question_rows
+        cache["question_units"] = json.loads(json.dumps(units))   # copy: part 2 adds ids below
+    else:
+        print("חלק 1: סיכום לפי שאלה — נטען מהמטמון")
+        question_rows = cache["question_rows"]
+        units = json.loads(json.dumps(cache["question_units"]))
 
     # ── Part 2: category summary ───────────────────────────────────────────────
     # Built from the per-question claims (so every merge made in part 1 carries over) plus
@@ -907,29 +926,36 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
     # merged with identical ones — across questions, or within a question when part 1
     # missed a merge — but never two different claims of the same participant under the
     # same question.
-    print("\nחלק 2: סיכום לפי קטגוריה")
-    other = [b for q in QUESTIONS for b in bullets_by_q[q] if b["cat"] is not None]
-    if other:
-        print(f"  {len(other)} טענות מקטגוריה אחרת: {', '.join(b['id'] for b in other)}")
-    units += [{"q": b["q"], "cat": b["cat"], "text": b["text"], "sources": b["sources"]} for b in other]
-    for k, u in enumerate(units, start=1):
-        u["id"] = f"u{k}"
+    if run("category"):
+        print("\nחלק 2: סיכום לפי קטגוריה")
+        other = [b for q in QUESTIONS for b in bullets_by_q[q] if b["cat"] is not None]
+        if other:
+            print(f"  {len(other)} טענות מקטגוריה אחרת: {', '.join(b['id'] for b in other)}")
+        units += [{"q": b["q"], "cat": b["cat"], "text": b["text"], "sources": b["sources"]} for b in other]
+        for k, u in enumerate(units, start=1):
+            u["id"] = f"u{k}"
 
-    category_rows = [["קטגוריה", "סיכום משולב"]]
-    category_lines: dict[str, list[str]] = {}
-    for g in CATEGORY_GROUPS:
-        items = [u for u in units if u["cat"] == g["key"]]
-        print(f"  {g['name']}... ({len(items)} טענות)")
-        if not items:
-            category_rows.append([g["name"], "אין נתונים."])
-            continue
-        prompt = f"קטגוריה: {g['name']}\n\n{_render_units(items)}"
-        merged = _merge_claims(CATEGORY_MERGER_SYSTEM, prompt, items,
-                               conflict_keys=lambda it: [(s.split(".")[0], it["q"]) for s in it["sources"]])
-        formatted = _format_claims(merged)
-        category_rows.append([g["name"], formatted])
-        category_lines[g["key"]] = formatted.splitlines()
-        print(f"    ✅ אוחדו ל-{len(merged)} טענות")
+        category_rows = [["קטגוריה", "סיכום משולב"]]
+        category_lines: dict[str, list[str]] = {}
+        for g in CATEGORY_GROUPS:
+            items = [u for u in units if u["cat"] == g["key"]]
+            print(f"  {g['name']}... ({len(items)} טענות)")
+            if not items:
+                category_rows.append([g["name"], "אין נתונים."])
+                continue
+            prompt = f"קטגוריה: {g['name']}\n\n{_render_units(items)}"
+            merged = _merge_claims(CATEGORY_MERGER_SYSTEM, prompt, items,
+                                   conflict_keys=lambda it: [(s.split(".")[0], it["q"]) for s in it["sources"]])
+            formatted = _format_claims(merged)
+            category_rows.append([g["name"], formatted])
+            category_lines[g["key"]] = formatted.splitlines()
+            print(f"    ✅ אוחדו ל-{len(merged)} טענות")
+        cache["category_rows"] = category_rows
+        cache["category_lines"] = category_lines
+    else:
+        print("\nחלק 2: סיכום לפי קטגוריה — נטען מהמטמון")
+        category_rows = cache["category_rows"]
+        category_lines = cache["category_lines"]
 
     # ── Part 3: category bullets grouped by related topic (for manual merge decisions) ──
     print("\nחלק 3: קיבוץ לפי נושאים")
@@ -951,7 +977,12 @@ def build_summary_rows(all_records: list[dict]) -> list[list[str]]:
     )
 
 
-def aggregate_command():
+def _records_fingerprint(records: list[dict]) -> str:
+    """Fingerprint of the analysis-tab rows aggregate reads, to detect a stale cache."""
+    return hashlib.sha256(json.dumps(records, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def aggregate_command(start: str = "question"):
     print("מתחבר ל-Google Sheets...")
     spreadsheet, _, analysis_ws = get_sheets()
 
@@ -968,8 +999,29 @@ def aggregate_command():
     if skipped:
         print(f"⚠️  דולג על {skipped} שורות עם אינדקס לא תקין — בדוק ומחק אותן ב-Sheet 2.\n")
 
+    # Partial rerun (--from category/groups): earlier steps come from the cache, which is only
+    # valid if the analysis tab hasn't changed since it was written.
+    fingerprint = _records_fingerprint(all_records)
+    cache: dict = {}
+    if start != "question":
+        try:
+            with open(AGGREGATE_CACHE_FILE, encoding="utf-8") as f:
+                cache = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            print(f"⛔ אין מטמון תקין מהרצה קודמת — הרץ aggregate מלא (בלי --from).")
+            return
+        needed = {"category": ["question_rows", "question_units"],
+                  "groups": ["question_rows", "category_rows", "category_lines"]}[start]
+        if cache.get("fingerprint") != fingerprint:
+            print("⛔ טאב הניתוח השתנה מאז ההרצה המלאה האחרונה — המטמון לא מעודכן.")
+            print("   הרץ aggregate מלא (בלי --from) כדי לבנות את הסיכום מחדש.")
+            return
+        if any(k not in cache for k in needed):
+            print(f"⛔ המטמון חסר נתונים לשלב '{start}' — הרץ aggregate מלא (בלי --from).")
+            return
+
     print(f"מאחד טענות מ-{len(all_records)} משתתפים...\n")
-    all_rows = build_summary_rows(all_records)
+    all_rows = build_summary_rows(all_records, start=start, cache=cache)
 
     # ── Write to "סיכום" tab ───────────────────────────────────────────────────
     width = max(len(r) for r in all_rows)   # the topic table has 3 columns
@@ -989,6 +1041,10 @@ def aggregate_command():
     )
     print("\n✅ הסיכום נכתב ל-Tab 'סיכום' ב-Google Sheets.")
 
+    cache["fingerprint"] = fingerprint
+    with open(AGGREGATE_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 def main():
@@ -1001,15 +1057,21 @@ def main():
     parser.add_argument("--index",        type=int,  default=0,     help="אינדקס המשתתף (ברירת מחדל: 0)")
     parser.add_argument("--all",          action="store_true",       help="עבד את כל השורות")
     parser.add_argument("--list-columns", action="store_true",       help="(sync בלבד) הצג שמות עמודות ויצא")
-    parser.add_argument("--force-index",  type=int, default=None,    help="(sync בלבד) עבד מחדש משתתף לפי אינדקס, גם אם לא השתנה")
+    parser.add_argument("--force-index",  type=int, nargs="+", default=None,
+                        help="(sync בלבד) עבד מחדש משתתפים לפי אינדקס, גם אם לא השתנו — אפשר כמה: --force-index 1 2 7")
+    parser.add_argument("--from", dest="start_from", choices=AGGREGATE_STEPS, default="question",
+                        help="(aggregate בלבד) מאיזה שלב להריץ מחדש: question — הכול (ברירת מחדל); "
+                             "category — מהסיכום לפי קטגוריה; groups — רק טבלת הקיבוץ לפי נושאים. "
+                             "השלבים הקודמים נטענים מ-aggregate_cache.json")
     args = parser.parse_args()
 
     if args.mode == "sync":
-        sync_command(list_columns=args.list_columns, force_index=args.force_index)
+        force = set(args.force_index) if args.force_index is not None else None
+        sync_command(list_columns=args.list_columns, force_index=force)
         return
 
     if args.mode == "aggregate":
-        aggregate_command()
+        aggregate_command(start=args.start_from)
         return
 
     df = pd.read_csv("feedbacks.csv", index_col=0, encoding="utf-8-sig")

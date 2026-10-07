@@ -6,6 +6,7 @@ service_account.json
 sync_state.json
 feedbacks.csv
 backups/
+aggregate_cache.json
 
 # Python
 __pycache__/
