@@ -832,7 +832,9 @@ def _topic_groups(lines: list[str]) -> list[list[str]]:
     bullet's position, so they follow the summary's popularity order."""
     if len(lines) <= 1:
         return [lines] if lines else []
-    prompt = "\n".join(f"{n}. {line.removeprefix('- ')}" for n, line in enumerate(lines, start=1))
+    # Group by content only: strip the participant indices so they can't steer the grouping
+    prompt = "\n".join(f"{n}. {_PARTICIPANTS_SUFFIX.sub('', line.removeprefix('- '))}"
+                       for n, line in enumerate(lines, start=1))
 
     def check(groups) -> str | None:
         ok = isinstance(groups, list) and all(isinstance(g, list) for g in groups)
@@ -860,12 +862,25 @@ def _participant_count(claim: dict) -> int:
     return len({s.split(".")[0] for s in claim["sources"]})
 
 
+def _participant_ids(claim: dict) -> list[str]:
+    """Unique participant indices behind a claim, numerically sorted ('p3.2' -> '3')."""
+    return sorted({s.split(".")[0][1:] for s in claim["sources"]}, key=int)
+
+
+# Participant indices are shown on every bullet so the author can merge bullets by hand and
+# count unique participants (not the sum of the original counts). Indices replace emails and
+# aren't personal information.
+_PARTICIPANTS_SUFFIX = re.compile(r"\s*\((?:ציינו \d+ משתתפים: [\d, ]+|משתתף \d+)\)$")
+
+
 def _format_claims(claims: list[dict]) -> str:
-    """Bullets ordered by unique-participant count (desc); count shown only when > 1."""
+    """Bullets ordered by unique-participant count (desc), each ending with its participant
+    indices: '(ציינו 2 משתתפים: 0, 3)' or, for one participant, '(משתתף 5)'."""
     lines = []
     for c in sorted(claims, key=_participant_count, reverse=True):
-        n = _participant_count(c)
-        lines.append(f"- {c['text']}" + (f" (ציינו {n} משתתפים)" if n > 1 else ""))
+        ids = _participant_ids(c)
+        suffix = f"(ציינו {len(ids)} משתתפים: {', '.join(ids)})" if len(ids) > 1 else f"(משתתף {ids[0]})"
+        lines.append(f"- {c['text']} {suffix}")
     return "\n".join(lines)
 
 
@@ -875,7 +890,7 @@ AGGREGATE_STEPS = ["question", "category", "groups"]   # in run order; see aggre
 # (e.g. how claims are split, merged, counted or formatted). Prompt and model changes are
 # detected automatically; logic changes are not, so cached outputs of that step must be
 # invalidated by hand through this number.
-AGGREGATE_LOGIC_VERSION = {"question": 1, "category": 1, "groups": 1}
+AGGREGATE_LOGIC_VERSION = {"question": 2, "category": 2, "groups": 2}   # v2: participant indices on bullets
 
 
 def _step_fingerprints() -> dict[str, str]:
